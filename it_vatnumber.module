@@ -1,0 +1,345 @@
+<?php
+// $Id$
+
+/**
+ * Italian VAT Number is a Drupal module that adds
+ * a CCK field, with validation, for italian VAT number (partita iva).
+ * 
+ * Author: Sergio Durzu - sergio.durzu@ildeposito.org
+ * 
+ * The script to check the control code of the tax code comes from here:
+ * http://www.icosaedro.it/cf-pi/index.html 
+ *
+ * Module created with this tutorial: 
+ * http://www.lullabot.com/articles/creating-custom-cck-fields
+ *
+ * Licensed under the GNU Public License (see LICENSE.txt)
+ */
+
+/**
+ * Implementation of hook_field_info().
+ */
+function it_vatnumber_field_info() {
+  return array(
+    // The machine name of the field, 
+    // no more than 32 characters.
+    'it_vatnumber' => array(
+      // The human-readable label of the field that will be 
+      // seen in the Manage fields screen.
+      'label' => t('VAT number'),
+      // A description of what type of data the field stores.
+      'description' => t('Stores and validates italian VAT number.'),      
+    ),
+  );
+}
+
+/**
+ * Implementation of hook_field_settings().
+ */
+function it_vatnumber_field_settings($op, $field) {
+  switch ($op) {
+    // Create the form element to be used on the field 
+    // settings form. 
+    case 'form':
+      $form = array();
+      $form['max_length'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Maximum length'),
+        '#default_value' => is_numeric($field['max_length']) ? $field['max_length'] : 11,
+        '#required' => FALSE,
+        
+        // Use #element_validate to validate the settings.
+        '#element_validate' => array('_it_vatnumber_length_validate'),
+        '#description' => t('The maximum length of the field in characters. Must be 11'),
+      );
+      return $form;
+      
+    // Return an array of the names of the field settings 
+    // defined by this module. 
+    case 'save':
+      return array('max_length');
+
+    // Define the database storage for this field using 
+    // the same construct used by schema API. 
+    case 'database columns':
+      $columns['value'] = array(
+        'type' => 'varchar', 
+        'length' => is_numeric($field['max_length']) ? $field['max_length'] : 11, 
+        'not null' => FALSE, 
+        'sortable' => TRUE, 
+        'views' => TRUE,
+      );
+      return $columns;
+
+    // Optional: Make changes to the default $data array 
+    // created for Views. 
+    case 'views data':
+      // Start with the $data created by CCK
+      // and alter it as needed. 
+      $data = content_views_field_views_data($field);
+      $db_info = content_database_info($field);
+      $table_alias = content_views_tablename($field);
+      $field_data = $data[$table_alias][$field['field_name'] .'_value'];
+      // Make changes to $data as needed here.
+      return $data;
+  }
+}
+
+/**
+ * Custom validation of settings values.
+ * 
+ * Create callbacks like this to do settings validation.
+ */
+function _it_vatnumber_length_validate($element, &$form_state) {
+  $value = $form_state['values']['max_length'];
+  if ($value && !is_numeric($value)|| $value < 1 || $value > 255) {
+    form_set_error('max_length', t('"Max length" must be 11.'));
+  }
+}
+
+/**
+ * Implementation of hook_field().
+ */
+function it_vatnumber_field($op, &$node, $field, &$items, $teaser, $page) {
+  switch ($op) {
+    // Do validation on the field values here. 
+    case 'validate':
+      if (is_array($items)) {
+        foreach ($items as $delta => $item) {
+          // The error_element is needed so that CCK can 
+          // set an error on the right sub-element when 
+          // fields are deeply nested in the form.
+          $error_element = isset($item['_error_element']) ? $item['_error_element'] : '';
+          if (is_array($item) && isset($item['_error_element'])) unset($item['_error_element']);
+        
+			if (!empty($item['value'])) {
+				/***** validazione ************/			
+			if( strlen($item['value']) != 11 ) {
+				form_set_error($error_element, t('VAT number must be 11 chars'));        
+			}         
+			
+			if( ! ereg("^[0-9]+$", $item['value']) ) {
+				form_set_error($error_element, t('VAT number has chars not allowed'));        
+			}
+			
+			$s = 0;
+   		for( $i = 0; $i <= 9; $i += 2 )
+         $s += ord($item['value'][$i]) - ord('0');
+    		for( $i = 1; $i <= 9; $i += 2 ){
+         	$c = 2*( ord($item['value'][$i]) - ord('0') );
+            if( $c > 9 )  $c = $c - 9;
+            $s += $c;
+    		}
+    		if( ( 10 - $s%10 )%10 != ord($item['value'][10]) - ord('0') ) {
+    			form_set_error($error_element, t('VAT code control is wrong'));    
+    		}
+		}
+	}        
+}
+return $items;
+
+    // This is where you make sure that user-provided 
+    // data is sanitized before being displayed.
+    case 'sanitize':
+      foreach ($items as $delta => $item) {
+        $it_vatnumber = check_plain($item['value']);
+        $items[$delta]['safe'] = $it_vatnumber;
+      }
+  }
+}
+
+/**
+ * Implementation of hook_content_is_empty().
+ */
+function it_vatnumber_content_is_empty($item, $field) {
+  if (empty($item['value'])) {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
+ * Implementation of hook content_generate().
+ */
+function it_vatnumber_content_generate($node, $field) {
+  $node_field = array();
+  // Generate a value that respects max_length.
+  if (empty($field['max_length'])) {
+    $field['max_length'] = 11;
+  }
+  $node_field['value'] = user_password($field['max_length']);
+  return $node_field;
+}
+
+/**
+ * Implementation of hook_token_list() 
+ * and hook_token_values().
+ * 
+ * Optional, provide token values for this field.
+ */
+function it_vatnumber_token_list($type = 'all') {
+  if ($type == 'field' || $type == 'all') {
+    $tokens = array();
+
+    $tokens['it_vatnumber']['raw']       = t('Raw, unfiltered text');
+    $tokens['it_vatnumber']['formatted'] = t('Formatted and filtered text');
+
+    return $tokens;
+  }
+}
+
+function it_vatnumber_token_values($type, $object = NULL) {
+  if ($type == 'field') {
+    $item = $object[0];
+
+    $tokens['raw']  = $item['value'];
+    $tokens['formatted'] = isset($item['view']) ? $item['view'] : '';
+    return $tokens;
+  }
+}
+
+//==========================================//
+// DEFINING A FORMATTER
+//==========================================//
+
+/**
+ * Implementation of hook_theme().
+ */
+function it_vatnumber_theme() {
+
+  return array(
+    // Themes for the formatters.
+    'it_vatnumber_formatter_default' => array(
+      'arguments' => array('element' => NULL),
+    ),
+    'it_vatnumber_formatter_plain' => array(
+      'arguments' => array('element' => NULL),
+    ),
+  );
+}
+
+/**
+ * Implementation of hook_field_formatter_info().
+ */
+function it_vatnumber_field_formatter_info() {
+  return array(
+    // The machine name of the formatter.
+    'default' => array(
+      // The human-readable label shown on the Display 
+      // fields screen.
+      'label' => t('Default'),
+      // An array of the field types this formatter 
+      // can be used on.
+      'field types' => array('it_vatnumber'),
+      'multiple values' => CONTENT_HANDLE_CORE,
+    ),
+    'plain' => array(
+      'label' => t('Plain text'),
+      'field types' => array('it_vatnumber'),
+      'multiple values' => CONTENT_HANDLE_CORE,
+    ),
+  );
+}
+
+/**
+ * Theme function for 'default' example field formatter.
+ */
+function theme_it_vatnumber_formatter_default($element) {
+  return $element['#item']['safe'];
+}
+
+/**
+ * Theme function for 'plain' example field formatter.
+ */
+function theme_it_vatnumber_formatter_plain($element) {
+  return strip_tags($element['#item']['safe']);
+}
+
+//==========================================//
+// DEFINING A WIDGET
+//==========================================//
+
+/**
+ * Implementation of hook_widget_info().
+ */
+function it_vatnumber_widget_info() {
+  return array(
+    // The machine name of the widget, no more than 32 
+    // characters.
+    'it_vatnumber_widget' => array(
+      // The human-readable label of the field that will be 
+      // seen in the Manage fields screen.
+      'label' => t('vatnumber'),
+      // An array of the field types this widget can be 
+      // used with.
+      'field types' => array('it_vatnumber'),
+      // Who will handle multiple values, default is core.
+      // 'CONTENT_HANDLE_MODULE' means the module does it.
+      // See optionwidgets for an example of a module that 
+      // handles its own multiple values.
+      'multiple values' => CONTENT_HANDLE_CORE,
+      'callbacks' => array(
+        // Who will create the default value, default is core.
+        // 'CONTENT_CALLBACK_CUSTOM' means the module does it.
+        // 'CONTENT_CALLBACK_NONE' means this widget has 
+        // no default value.
+        'default value' => CONTENT_CALLBACK_DEFAULT,
+      ),
+    ),
+  );
+}
+
+/**
+ * Implementation of hook_widget_settings().
+ */
+function it_vatnumber_widget_settings($op, $widget) {
+  switch ($op) {
+    // Create the form element to be used on the widget 
+    // settings form. 
+    case 'form':
+      $form = array();
+      $size = (isset($widget['size']) && is_numeric($widget['size'])) ? $widget['size'] : 60;
+      $form['size'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Size of textfield'),
+        '#default_value' => $size,
+        '#element_validate' => array('_element_validate_integer_positive'),
+        '#required' => TRUE,
+      );
+      return $form;
+
+    // Return an array of the names of the widget settings 
+    // defined by this module. 
+    case 'save':
+      return array('size');
+  }
+}
+
+/**
+ * Implementation of hook_widget().
+ */
+function it_vatnumber_widget(&$form, &$form_state, $field, $items, $delta = 0) {
+  
+  $element['value'] = array(
+    '#type' => 'textfield',
+    '#title' => check_plain($field['widget']['label']),
+    '#default_value' => isset($items[$delta]['value']) ? $items[$delta]['value'] : NULL,
+    '#autocomplete_path' => $element['#autocomplete_path'],
+    '#size' => !empty($field['widget']['size']) ? $field['widget']['size'] : 60,
+    '#attributes' => array('class' => 'it_vatnumber'),
+    '#required' => $field['required'],
+    '#maxlength' => !empty($field['max_length']) ? $field['max_length'] : NULL,
+  );
+  
+  // Used so that hook_field('validate') knows where to 
+  // flag an error in deeply nested forms.
+  if (empty($form['#parents'])) {
+    $form['#parents'] = array();
+  }
+  $element['_error_element'] = array(
+    '#type' => 'value',
+    '#value' => implode('][', array_merge($form['#parents'], array('value'))),
+  );
+  
+  return $element;
+}

@@ -1,0 +1,40 @@
+<?php
+// $Id$
+// Notify CCK when this module is enabled, disabled, installed, and uninstalled
+// so CCK can do any necessary preparation or cleanup.
+/**
+ * @file
+ * Implementation of hook_install().
+ */
+function it_vatnumber_install() {
+  drupal_load('module', 'content');
+  content_notify('install', 'it_vatnumber');
+}
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function it_vatnumber_uninstall() {
+  drupal_load('module', 'content');
+  content_notify('uninstall', 'it_vatnumber');
+}
+
+/**
+ * Implementation of hook_enable().
+ *
+ * Notify content module when this module is enabled.
+ */
+function it_vatnumber_enable() {
+  drupal_load('module', 'content');
+  content_notify('enable', 'it_vatnumber');
+}
+
+/**
+ * Implementation of hook_disable().
+ *
+ * Notify content module when this module is disabled.
+ */
+function it_vatnumber_disable() {
+  drupal_load('module', 'content');
+  content_notify('disable', 'it_vatnumber');
+}

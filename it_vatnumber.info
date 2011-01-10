@@ -1,0 +1,7 @@
+; $Id$
+name = Italian VAT number
+description = Adds a CCK field to insert and validate italian VAT number (partita iva).
+dependencies[] = content
+package = CCK
+core = 6.x
+
